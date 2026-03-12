@@ -74,15 +74,31 @@ body {
     border-radius: 50%;
     display: inline-block;
 }
+
+/* Кнопка входа */
+#googleLoginBtn {
+    margin-bottom: 15px;
+    padding: 8px 12px;
+    font-weight: bold;
+    cursor: pointer;
+    background: #DB4437;
+    color: white;
+    border: none;
+    border-radius: 5px;
+}
 </style>
 </head>
 <body>
 
 <h2>Моя панель статусов</h2>
-<div id="myInfo">
+
+<button id="googleLoginBtn">Войти через Google</button>
+
+<div id="myInfo" style="display:none;">
     <img id="myAvatar" class="user-avatar" src="">
     <span id="myName">Загрузка...</span>
 </div>
+
 <div id="statusPanel"></div>
 
 <h3>Все пользователи:</h3>
@@ -96,32 +112,70 @@ const URL = 'https://juqbbjgxpggtnjoybszb.supabase.co';
 const KEY = 'sb_publishable_XrLZEfrdhxrcGPN_XR1_5A_p_oq9Mqp';
 const supabase = createClient(URL, KEY);
 
-// =================== Фиксированный пользователь ===================
-const MY_ID = '7fb88b37-c278-4f91-9685-7bb13a455a35';
-
 // =================== Панель статусов ===================
 const statuses = [
-    { text: "Играю", class: "playing" },
-    { text: "Отдыхаю", class: "resting" },
-    { text: "Сплю", class: "sleeping" },
-    { text: "Не беспокоить", class: "busy" }
+    { text: "Играю", class: "playing", color: "#4CAF50" },
+    { text: "Отдыхаю", class: "resting", color: "#2196F3" },
+    { text: "Сплю", class: "sleeping", color: "#9C27B0" },
+    { text: "Не беспокоить", class: "busy", color: "#f44336" }
 ];
 
 function renderStatusPanel() {
     const panel = document.getElementById("statusPanel");
     panel.innerHTML = statuses.map(s => `
-        <button class="status-btn ${s.class}" onclick="changeStatus('${s.text}')">
+        <button class="status-btn ${s.class}" onclick="changeStatus('${s.text}', '${s.color}')">
             ${s.text}
         </button>
     `).join('');
 }
 
+// =================== Текущий пользователь ===================
+let currentUser = null;
+
+// =================== Вход через Google ===================
+const loginBtn = document.getElementById('googleLoginBtn');
+
+loginBtn.onclick = async () => {
+    const { error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+            redirectTo: window.location.href // после входа возвращаемся на эту страницу
+        }
+    });
+    if(error) console.error('Ошибка входа через Google:', error);
+};
+
+// Отслеживаем изменения авторизации
+supabase.auth.onAuthStateChange(async (event, session) => {
+    currentUser = session?.user || null;
+
+    if(currentUser){
+        // Показываем блок с информацией
+        document.getElementById('myInfo').style.display = 'flex';
+        loginBtn.style.display = 'none'; // прячем кнопку входа
+
+        // Если пользователя ещё нет в таблице, создаём запись
+        await supabase.from('profiles').upsert({
+            id: currentUser.id,
+            username: currentUser.user_metadata.full_name || currentUser.email,
+            avatar_url: currentUser.user_metadata.avatar_url || ''
+        });
+
+        fetchGroup();
+    } else {
+        document.getElementById('myInfo').style.display = 'none';
+        loginBtn.style.display = 'inline-block';
+    }
+});
+
 // =================== Изменение статуса ===================
 window.changeStatus = async (text, color) => {
+    if(!currentUser) return alert("Сначала войдите через Google!");
+
     const { error } = await supabase
         .from('profiles')
         .update({ status: text, color: color })
-        .eq('id', MY_ID);
+        .eq('id', currentUser.id);
 
     if(error) {
         console.error(error);
@@ -140,8 +194,8 @@ async function fetchGroup() {
 
     if(error) return console.error(error);
 
-    const me = data.find(u => u.id === MY_ID);
-    if(me) {
+    const me = currentUser ? data.find(u => u.id === currentUser.id) : null;
+    if(me){
         document.getElementById("myName").innerText = me.username;
         document.getElementById("myAvatar").src = me.avatar_url || '';
     }
