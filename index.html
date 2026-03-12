@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<title>Панель статусов Supabase</title>
+<style>
+body {
+    font-family: sans-serif;
+    background: #f4f9ff;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 30px;
+}
+
+#myInfo {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 10px;
+}
+
+#statusPanel {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 20px;
+}
+
+.status-btn {
+    padding: 5px 10px;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    color: white;
+    font-weight: bold;
+    font-size: 13px;
+}
+
+.status-btn.playing { background: #4CAF50; }
+.status-btn.resting { background: #2196F3; }
+.status-btn.sleeping { background: #9C27B0; }
+.status-btn.busy { background: #f44336; }
+
+#usersList {
+    width: 300px;
+    background: white;
+    padding: 15px;
+    border-radius: 10px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+}
+
+.user-item {
+    display: flex;
+    justify-content: space-between;
+    padding: 8px;
+    border-bottom: 1px solid #eee;
+}
+
+.user-item:last-child {
+    border-bottom: none;
+}
+
+.user-item small {
+    font-size: 12px;
+}
+
+.status-dot {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    margin-right: 5px;
+    display: inline-block;
+}
+</style>
+</head>
+<body>
+
+<h2>Моя панель статусов</h2>
+<div id="myInfo">Пользователь: <span id="myName">Загрузка...</span></div>
+<div id="statusPanel"></div>
+
+<h3>Все пользователи:</h3>
+<div id="usersList"></div>
+
+<script type="module">
+import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm';
+
+// =================== Supabase ===================
+const URL = 'https://juqbbjgxpggtnjoybszb.supabase.co';
+const KEY = 'sb_publishable_XrLZEfrdhxrcGPN_XR1_5A_p_oq9Mqp';
+const supabase = createClient(URL, KEY);
+
+// =================== Фиксированный пользователь ===================
+const MY_ID = '7fb88b37-c278-4f91-9685-7bb13a455a35';
+
+// =================== Панель статусов ===================
+const statuses = [
+    { text: "Играю", color: "#4CAF50", class: "playing" },
+    { text: "Отдыхаю", color: "#2196F3", class: "resting" },
+    { text: "Сплю", color: "#9C27B0", class: "sleeping" },
+    { text: "Не беспокоить", color: "#f44336", class: "busy" }
+];
+
+function renderStatusPanel() {
+    const panel = document.getElementById("statusPanel");
+    panel.innerHTML = statuses.map(s => `
+        <button class="status-btn ${s.class}" onclick="changeStatus('${s.text}','${s.color}')">
+            ${s.text}
+        </button>
+    `).join('');
+}
+
+// =================== Изменение статуса ===================
+window.changeStatus = async (text, color) => {
+    const { error } = await supabase
+        .from('profiles')
+        .update({ status: text, color: color })
+        .eq('id', MY_ID);
+
+    if(error) {
+        console.error(error);
+        alert("Ошибка! Проверьте RLS политики в Supabase.");
+    } else {
+        fetchGroup();
+    }
+}
+
+// =================== Загрузка пользователей ===================
+async function fetchGroup() {
+    const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .order('username', { ascending: true });
+
+    if(error) return console.error(error);
+
+    // Обновляем список всех пользователей
+    const list = document.getElementById("usersList");
+    list.innerHTML = data.map(user => `
+        <div class="user-item">
+            <div><span class="status-dot" style="background:${user.color || '#666'}"></span>${user.username}</div>
+            <small>${user.status || 'Не задан'}</small>
+        </div>
+    `).join("");
+
+    // Отображаем имя текущего пользователя
+    const me = data.find(u => u.id === MY_ID);
+    if(me) document.getElementById("myName").innerText = me.username || "Без имени";
+}
+
+// =================== Инициализация ===================
+renderStatusPanel();
+fetchGroup();
+setInterval(fetchGroup, 5000); // обновление каждые 5 секунд
+
+</script>
+</body>
+</html>
