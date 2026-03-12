@@ -117,17 +117,17 @@ function renderStatusPanel() {
 }
 
 // =================== Изменение статуса ===================
-window.changeStatus = async (text) => {
+window.changeStatus = async (text, color) => {
     const { error } = await supabase
         .from('profiles')
-        .update({ status: text })
+        .update({ status: text, color: color })
         .eq('id', MY_ID);
 
     if(error) {
         console.error(error);
         alert("Ошибка! Проверьте RLS политики в Supabase.");
     } else {
-        fetchGroup();
+        fetchGroup(); // обновляем список
     }
 }
 
@@ -140,32 +140,21 @@ async function fetchGroup() {
 
     if(error) return console.error(error);
 
-    // Текущий пользователь
     const me = data.find(u => u.id === MY_ID);
     if(me) {
         document.getElementById("myName").innerText = me.username;
         document.getElementById("myAvatar").src = me.avatar_url || '';
     }
 
-    // Список всех пользователей
     const list = document.getElementById("usersList");
-    list.innerHTML = data.map(user => {
-        // Локально задаем цвет статуса
-        let color = '#666';
-        if(user.status === 'Играю') color = '#4CAF50';
-        else if(user.status === 'Отдыхаю') color = '#2196F3';
-        else if(user.status === 'Сплю') color = '#9C27B0';
-        else if(user.status === 'Не беспокоить') color = '#f44336';
-
-        return `
+    list.innerHTML = data.map(user => `
         <div class="user-item">
             <img src="${user.avatar_url || ''}" class="user-avatar">
             <span>${user.username}</span>
-            <span class="status-dot" style="background:${color}"></span>
+            <span class="status-dot" style="background:${user.color || '#666'}"></span>
             <span>${user.status || 'Не задан'}</span>
         </div>
-        `;
-    }).join('');
+    `).join('');
 }
 
 // =================== Инициализация ===================
