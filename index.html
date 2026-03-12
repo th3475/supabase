@@ -20,13 +20,6 @@ body {
     margin-bottom: 10px;
 }
 
-.user-avatar {
-    width: 40px;
-    height: 40px;
-    border-radius: 50%;
-    border: 2px solid #007bff;
-}
-
 #statusPanel {
     display: flex;
     gap: 10px;
@@ -58,8 +51,7 @@ body {
 
 .user-item {
     display: flex;
-    align-items: center;
-    gap: 10px;
+    justify-content: space-between;
     padding: 8px;
     border-bottom: 1px solid #eee;
 }
@@ -68,10 +60,15 @@ body {
     border-bottom: none;
 }
 
+.user-item small {
+    font-size: 12px;
+}
+
 .status-dot {
     width: 12px;
     height: 12px;
     border-radius: 50%;
+    margin-right: 5px;
     display: inline-block;
 }
 </style>
@@ -79,10 +76,7 @@ body {
 <body>
 
 <h2>Моя панель статусов</h2>
-<div id="myInfo">
-    <img id="myAvatar" class="user-avatar" src="">
-    <span id="myName">Загрузка...</span>
-</div>
+<div id="myInfo">Пользователь: <span id="myName">Загрузка...</span></div>
 <div id="statusPanel"></div>
 
 <h3>Все пользователи:</h3>
@@ -101,16 +95,16 @@ const MY_ID = '4hc5694e-89f8-47d9-9b60-2d3hd2439122';
 
 // =================== Панель статусов ===================
 const statuses = [
-    { text: "Играю", class: "playing" },
-    { text: "Отдыхаю", class: "resting" },
-    { text: "Сплю", class: "sleeping" },
-    { text: "Не беспокоить", class: "busy" }
+    { text: "Играю", color: "#4CAF50", class: "playing" },
+    { text: "Отдыхаю", color: "#2196F3", class: "resting" },
+    { text: "Сплю", color: "#9C27B0", class: "sleeping" },
+    { text: "Не беспокоить", color: "#f44336", class: "busy" }
 ];
 
 function renderStatusPanel() {
     const panel = document.getElementById("statusPanel");
     panel.innerHTML = statuses.map(s => `
-        <button class="status-btn ${s.class}" onclick="changeStatus('${s.text}')">
+        <button class="status-btn ${s.class}" onclick="changeStatus('${s.text}','${s.color}')">
             ${s.text}
         </button>
     `).join('');
@@ -127,7 +121,7 @@ window.changeStatus = async (text, color) => {
         console.error(error);
         alert("Ошибка! Проверьте RLS политики в Supabase.");
     } else {
-        fetchGroup(); // обновляем список
+        fetchGroup();
     }
 }
 
@@ -140,27 +134,24 @@ async function fetchGroup() {
 
     if(error) return console.error(error);
 
-    const me = data.find(u => u.id === MY_ID);
-    if(me) {
-        document.getElementById("myName").innerText = me.username;
-        document.getElementById("myAvatar").src = me.avatar_url || '';
-    }
-
+    // Обновляем список всех пользователей
     const list = document.getElementById("usersList");
     list.innerHTML = data.map(user => `
         <div class="user-item">
-            <img src="${user.avatar_url || ''}" class="user-avatar">
-            <span>${user.username}</span>
-            <span class="status-dot" style="background:${user.color || '#666'}"></span>
-            <span>${user.status || 'Не задан'}</span>
+            <div><span class="status-dot" style="background:${user.color || '#666'}"></span>${user.username}</div>
+            <small>${user.status || 'Не задан'}</small>
         </div>
-    `).join('');
+    `).join("");
+
+    // Отображаем имя текущего пользователя
+    const me = data.find(u => u.id === MY_ID);
+    if(me) document.getElementById("myName").innerText = me.username || "Без имени";
 }
 
 // =================== Инициализация ===================
 renderStatusPanel();
 fetchGroup();
-setInterval(fetchGroup, 5000);
+setInterval(fetchGroup, 5000); // обновление каждые 5 секунд
 
 </script>
 </body>
