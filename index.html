@@ -131,7 +131,7 @@ function renderStatusPanel() {
 
 // =================== Пользователь ===================
 let currentUser = null;
-
+let activityInterval = null;
 // =================== Google Login ===================
 const loginBtn = document.getElementById('googleLoginBtn');
 
@@ -146,32 +146,39 @@ loginBtn.onclick = async () => {
 supabase.auth.onAuthStateChange(async (event, session) => {
     currentUser = session?.user || null;
 
+    // очищаем прошлый интервал
+    if(activityInterval) clearInterval(activityInterval);
+
     if(currentUser){
+
         document.getElementById('myInfo').style.display = 'flex';
         loginBtn.style.display = 'none';
 
+        // создаём/обновляем профиль
         await supabase.from('profiles').upsert({
             id: currentUser.id,
             username: currentUser.user_metadata.full_name || currentUser.email,
             avatar_url: currentUser.user_metadata.avatar_url || ''
         });
 
-        // обновление активности
-        setInterval(async () => {
-            if(currentUser){
-                await supabase.from('profiles').update({
-                    last_seen: new Date()
-                }).eq('id', currentUser.id);
-            }
+        // ✅ интервал ТОЛЬКО если пользователь есть
+        activityInterval = setInterval(async () => {
+            await supabase.from('profiles').update({
+                last_seen: new Date()
+            }).eq('id', currentUser.id);
         }, 10000);
 
         fetchGroup();
+
     } else {
+
         document.getElementById('myInfo').style.display = 'none';
         loginBtn.style.display = 'inline-block';
+
+        // на всякий случай обнуляем
+        currentUser = null;
     }
 });
-
 // =================== Смена статуса ===================
 window.changeStatus = async (text, color) => {
     if(!currentUser) return alert("Сначала войдите!");
