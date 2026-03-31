@@ -112,7 +112,7 @@ const URL = 'https://juqbbjgxpggtnjoybszb.supabase.co';
 const KEY = 'sb_publishable_XrLZEfrdhxrcGPN_XR1_5A_p_oq9Mqp';
 const supabase = createClient(URL, KEY);
 
-// =================== Панель статусов ===================
+// =================== Статусы ===================
 const statuses = [
     { text: "Играю", class: "playing", color: "#4CAF50" },
     { text: "Отдыхаю", class: "resting", color: "#2196F3" },
@@ -129,37 +129,41 @@ function renderStatusPanel() {
     `).join('');
 }
 
-// =================== Текущий пользователь ===================
+// =================== Пользователь ===================
 let currentUser = null;
 
-// =================== Вход через Google ===================
+// =================== Google Login ===================
 const loginBtn = document.getElementById('googleLoginBtn');
 
 loginBtn.onclick = async () => {
-    const { error } = await supabase.auth.signInWithOAuth({
+    await supabase.auth.signInWithOAuth({
         provider: 'google',
-        options: {
-            redirectTo: window.location.href // после входа возвращаемся на эту страницу
-        }
+        options: { redirectTo: window.location.href }
     });
-    if(error) console.error('Ошибка входа через Google:', error);
 };
 
-// Отслеживаем изменения авторизации
+// =================== Авторизация ===================
 supabase.auth.onAuthStateChange(async (event, session) => {
     currentUser = session?.user || null;
 
     if(currentUser){
-        // Показываем блок с информацией
         document.getElementById('myInfo').style.display = 'flex';
-        loginBtn.style.display = 'none'; // прячем кнопку входа
+        loginBtn.style.display = 'none';
 
-        // Если пользователя ещё нет в таблице, создаём запись
         await supabase.from('profiles').upsert({
             id: currentUser.id,
             username: currentUser.user_metadata.full_name || currentUser.email,
             avatar_url: currentUser.user_metadata.avatar_url || ''
         });
+
+        // обновление активности
+        setInterval(async () => {
+            if(currentUser){
+                await supabase.from('profiles').update({
+                    last_seen: new Date()
+                }).eq('id', currentUser.id);
+            }
+        }, 10000);
 
         fetchGroup();
     } else {
@@ -168,32 +172,34 @@ supabase.auth.onAuthStateChange(async (event, session) => {
     }
 });
 
-// =================== Изменение статуса ===================
+// =================== Смена статуса ===================
 window.changeStatus = async (text, color) => {
-    if(!currentUser) return alert("Сначала войдите через Google!");
+    if(!currentUser) return alert("Сначала войдите!");
 
-    const { error } = await supabase
+    await supabase
         .from('profiles')
-        .update({ status: text, color: color })
+        .update({
+            status: text,
+            color: color,
+            status_started: new Date()
+        })
         .eq('id', currentUser.id);
 
-    if(error) {
-        console.error(error);
-        alert("Ошибка! Проверьте RLS политики в Supabase.");
-    } else {
-        fetchGroup(); // обновляем список
-    }
-}
+    fetchGroup();
+};
 
 // =================== Загрузка пользователей ===================
 async function fetchGroup() {
     const { data, error } = await supabase
         .from('profiles')
         .select('*')
-        .order('username', { ascending: true });
+        .order('username');
 
     if(error) return console.error(error);
 
+    const now = new Date();
+
+    // текущий пользователь
     const me = currentUser ? data.find(u => u.id === currentUser.id) : null;
     if(me){
         document.getElementById("myName").innerText = me.username;
@@ -201,17 +207,37 @@ async function fetchGroup() {
     }
 
     const list = document.getElementById("usersList");
-    list.innerHTML = data.map(user => `
+
+    list.innerHTML = data.map(user => {
+
+        // онлайн
+        let online = false;
+        if(user.last_seen){
+            const diff = (now - new Date(user.last_seen)) / 1000;
+            online = diff < 15;
+        }
+
+        // таймер
+        let timeText = "";
+        if(user.status_started){
+            const minutes = Math.floor((now - new Date(user.status_started)) / 60000);
+            timeText = ` (${minutes} мин)`;
+        }
+
+        return `
         <div class="user-item">
             <img src="${user.avatar_url || ''}" class="user-avatar">
             <span>${user.username}</span>
-            <span class="status-dot" style="background:${user.color || '#666'}"></span>
-            <span>${user.status || 'Не задан'}</span>
+
+            <span class="status-dot" style="background:${online ? 'limegreen' : 'gray'}"></span>
+
+            <span>${user.status || 'Не задан'}${timeText}</span>
         </div>
-    `).join('');
+        `;
+    }).join('');
 }
 
-// =================== Инициализация ===================
+// =================== Старт ===================
 renderStatusPanel();
 fetchGroup();
 setInterval(fetchGroup, 5000);
